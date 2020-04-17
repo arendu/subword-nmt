@@ -22,6 +22,7 @@ import argparse
 import re
 import warnings
 import random
+import pdb
 
 
 # hack for python2/3 compatibility
@@ -30,7 +31,8 @@ argparse.open = open
 
 class BPE(object):
 
-    def __init__(self, codes, merges=-1, separator='@@', vocab=None, glossaries=None):
+    def __init__(self, codes, merges=-1, separator='@@', vocab=None, glossaries=None, no_split=[]):
+        self.no_split = no_split
 
         codes.seek(0)
         offset=1
@@ -92,26 +94,39 @@ class BPE(object):
     def segment_tokens(self, tokens, dropout=0):
         """segment a sequence of tokens with BPE encoding"""
         output = []
-        for word in tokens:
+        words, feats = zip(*[(i.split('|')[0], '|'.join(i.split('|')[1:])) for i in tokens])
+        for word in words:
             # eliminate double spaces
-            if not word:
-                continue
-            new_word = [out for segment in self._isolate_glossaries(word)
-                        for out in encode(segment,
-                                          self.bpe_codes,
-                                          self.bpe_codes_reverse,
-                                          self.vocab,
-                                          self.separator,
-                                          self.version,
-                                          self.cache,
-                                          self.glossaries_regex,
-                                          dropout)]
+            if word in self.no_split:
+                output.append(word)
+            else:
+                if not word:
+                    continue
 
-            for item in new_word[:-1]:
-                output.append(item + self.separator)
-            output.append(new_word[-1])
+                new_word = [out for segment in self._isolate_glossaries(word)
+                            for out in encode(segment,
+                                              self.bpe_codes,
+                                              self.bpe_codes_reverse,
+                                              self.vocab,
+                                              self.separator,
+                                              self.version,
+                                              self.cache,
+                                              self.glossaries_regex,
+                                              dropout)]
 
-        return output
+                for item in new_word[:-1]:
+                    output.append(item + self.separator)
+                output.append(new_word[-1])
+        final_output = []
+        feat_idx = 0
+        for o in output:
+            if feats[feat_idx] != '':
+                final_output.append(o + '|' + feats[feat_idx])
+            else:
+                final_output.append(o)
+            if not o.endswith(self.separator):
+                feat_idx += 1
+        return final_output
 
     def _isolate_glossaries(self, word):
         word_segments = [word]
@@ -159,6 +174,10 @@ def create_parser(subparsers=None):
         '--vocabulary-threshold', type=int, default=None,
         metavar="INT",
         help="Vocabulary threshold. If vocabulary is provided, any word with frequency < threshold will be treated as OOV")
+    parser.add_argument(
+        '--nosplit', type=str, default=None,
+        metavar="PATH",
+        help="A file with symbols/tokens to not split i.e. special tags etc.")
     parser.add_argument(
         '--dropout', type=float, default=0,
         metavar="P",
@@ -355,13 +374,17 @@ if __name__ == '__main__':
     else:
         vocabulary = None
 
+    if args.nosplit:
+        no_split = [i.strip() for i in codecs.open(args.nosplit, 'r', encoding='utf-8').readlines()]
+    else:
+        no_split = []
+
     if sys.version_info < (3, 0):
         args.separator = args.separator.decode('UTF-8')
         if args.glossaries:
             args.glossaries = [g.decode('UTF-8') for g in args.glossaries]
 
-
-    bpe = BPE(args.codes, args.merges, args.separator, vocabulary, args.glossaries)
+    bpe = BPE(args.codes, args.merges, args.separator, vocabulary, args.glossaries, no_split)
 
     for line in args.input:
         args.output.write(bpe.process_line(line, args.dropout))
