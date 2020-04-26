@@ -24,6 +24,8 @@ import warnings
 import random
 import pdb
 
+FEATURE_SEP='｜'
+
 
 # hack for python2/3 compatibility
 from io import open
@@ -94,7 +96,7 @@ class BPE(object):
     def segment_tokens(self, tokens, dropout=0):
         """segment a sequence of tokens with BPE encoding"""
         output = []
-        words, feats = zip(*[(i.split('|')[0], '|'.join(i.split('|')[1:])) for i in tokens])
+        words, feats = zip(*[(i.split(FEATURE_SEP)[0], FEATURE_SEP.join(i.split(FEATURE_SEP)[1:])) for i in tokens])
         for word in words:
             # eliminate double spaces
             if word in self.no_split:
@@ -121,7 +123,7 @@ class BPE(object):
         feat_idx = 0
         for o in output:
             if feats[feat_idx] != '':
-                final_output.append(o + '|' + feats[feat_idx])
+                final_output.append(o + FEATURE_SEP + feats[feat_idx])
             else:
                 final_output.append(o)
             if not o.endswith(self.separator):
