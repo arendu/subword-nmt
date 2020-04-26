@@ -99,7 +99,7 @@ class BPE(object):
         words, feats = zip(*[(i.split(FEATURE_SEP)[0], FEATURE_SEP.join(i.split(FEATURE_SEP)[1:])) for i in tokens])
         for word in words:
             # eliminate double spaces
-            if word in self.no_split:
+            if word in self.no_split or word.endswith(self.separator):
                 output.append(word)
             else:
                 if not word:
